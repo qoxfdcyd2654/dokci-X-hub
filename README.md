@@ -3,6 +3,7 @@
 # ВНИМАНИЕ СКРИПТ НА ПОЛЕТ НЕ МОЙ
 https://raw.githubusercontent.com/XNEOFF/FlyGuiV3/main/FlyGuiV3.txt
 (спасибо XNEOFF!)
+https://github.com/XNEOFF
 # дискорд сервер
 также мы можете вступить в наш сервер https://discord.gg/PSJTCvMEKK
  ## на последок
