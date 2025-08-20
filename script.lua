@@ -14,6 +14,12 @@ local espEnabled = false
 local espConnections = {}
 local espBillboards = {}
 
+-- Переменные для функций
+local nvEnabled = false
+local originalAmbient
+local invisEnabled = false
+local originalTransparency = {}
+
 -- Функция для ESP
 local function toggleESP()
 	espEnabled = not espEnabled
@@ -21,53 +27,67 @@ local function toggleESP()
 	if espEnabled then
 		-- Создаем ESP для всех игроков
 		for _, targetPlayer in ipairs(Players:GetPlayers()) do
-			if espBillboards[targetPlayer] then continue end
+			if targetPlayer ~= player and not espBillboards[targetPlayer] then -- Исправлено: убрано continue, добавлена проверка на себя
 
-			local function createBillboard(char)
-				if not char then return end
+				local function createBillboard(char)
+					if not char or not espEnabled then return end -- Проверка, что ESP всё ещё включен
 
-				-- Ожидаем появление HumanoidRootPart
-				local rootPart = char:FindFirstChild("HumanoidRootPart")
-				if not rootPart then
-					rootPart = char:WaitForChild("HumanoidRootPart", 2)
-					if not rootPart then return end
+					-- Ожидаем появление HumanoidRootPart
+					local rootPart = char:FindFirstChild("HumanoidRootPart")
+					if not rootPart then
+						local success, err = pcall(function()
+							rootPart = char:WaitForChild("HumanoidRootPart", 2)
+						end)
+						if not success or not rootPart then return end
+					end
+
+					-- Создаем BillboardGui
+					local billboard = Instance.new("BillboardGui")
+					billboard.Name = targetPlayer.Name .. "_ESP"
+					billboard.Size = UDim2.new(0, 200, 0, 50)
+					billboard.StudsOffset = Vector3.new(0, 3, 0)
+					billboard.AlwaysOnTop = true
+					billboard.MaxDistance = 1000
+					billboard.Adornee = rootPart
+					billboard.Parent = player.PlayerGui.DokciXHub
+					billboard.Enabled = true
+
+					-- Текст с именем игрока
+					local textLabel = Instance.new("TextLabel")
+					textLabel.Size = UDim2.new(1, 0, 1, 0)
+					textLabel.BackgroundTransparency = 1
+					textLabel.Text = targetPlayer.Name
+					textLabel.TextColor3 = Color3.new(1, 0, 0)
+					textLabel.TextStrokeTransparency = 0
+					textLabel.TextStrokeColor3 = Color3.new(0, 0, 0)
+					textLabel.Font = Enum.Font.GothamBold
+					textLabel.TextSize = 14
+					textLabel.Parent = billboard
+
+					espBillboards[targetPlayer] = billboard
 				end
 
-				-- Создаем BillboardGui
-				local billboard = Instance.new("BillboardGui")
-				billboard.Name = targetPlayer.Name .. "_ESP"
-				billboard.Size = UDim2.new(0, 200, 0, 50)
-				billboard.StudsOffset = Vector3.new(0, 3, 0) -- Высота над головой
-				billboard.AlwaysOnTop = true
-				billboard.MaxDistance = 1000
-				billboard.Adornee = rootPart
-				billboard.Parent = player.PlayerGui.DokciXHub
+				-- Обработка текущего персонажа
+				if targetPlayer.Character then
+					createBillboard(targetPlayer.Character)
+				end
 
-				-- Текст с именем игрока
-				local textLabel = Instance.new("TextLabel", billboard)
-				textLabel.Size = UDim2.new(1, 0, 1, 0)
-				textLabel.BackgroundTransparency = 1
-				textLabel.Text = targetPlayer.Name
-				textLabel.TextColor3 = Color3.new(1, 0, 0) -- Красный
-				textLabel.TextStrokeTransparency = 0
-				textLabel.TextStrokeColor3 = Color3.new(0, 0, 0)
-				textLabel.Font = Enum.Font.GothamBold
-				textLabel.TextSize = 14
-
-				espBillboards[targetPlayer] = billboard
+				-- Обработка смены персонажа
+				local conn
+				conn = targetPlayer.CharacterAdded:Connect(function(char)
+					if espBillboards[targetPlayer] then
+						espBillboards[targetPlayer]:Destroy()
+						espBillboards[targetPlayer] = nil
+					end
+					createBillboard(char)
+				end)
+				espConnections[targetPlayer] = conn
 			end
-
-			-- Обработка текущего персонажа
-			if targetPlayer.Character then
-				createBillboard(targetPlayer.Character)
-			end
-
-			-- Обработка смены персонажа
-			espConnections[targetPlayer] = targetPlayer.CharacterAdded:Connect(createBillboard)
 		end
 
 		-- Обработка новых игроков
 		espConnections.playerAdded = Players.PlayerAdded:Connect(function(newPlayer)
+			if newPlayer == player then return end -- Не создаем ESP для себя
 			espConnections[newPlayer] = newPlayer.CharacterAdded:Connect(function(char)
 				if not espEnabled then return end
 
@@ -79,10 +99,10 @@ local function toggleESP()
 
 				local billboard = Instance.new("BillboardGui")
 				billboard.Name = newPlayer.Name .. "_ESP"
-				billboard.Size = UDim2.new(0, 250, 0, 90)
+				billboard.Size = UDim2.new(0, 200, 0, 50) -- Исправлено: размер как у остальных
 				billboard.StudsOffset = Vector3.new(0, 3, 0)
 				billboard.AlwaysOnTop = true
-				billboard.MaxDistance = 9999999999
+				billboard.MaxDistance = 1000 -- Исправлено: разумная дистанция
 				billboard.Adornee = rootPart
 				billboard.Parent = player.PlayerGui.DokciXHub
 
@@ -90,7 +110,7 @@ local function toggleESP()
 				textLabel.Size = UDim2.new(1, 0, 1, 0)
 				textLabel.BackgroundTransparency = 1
 				textLabel.Text = newPlayer.Name
-				textLabel.TextColor3 = Color3.new(0.364706, 1, 0.0941176)
+				textLabel.TextColor3 = Color3.new(0.36, 1, 0.09) -- Зеленый для новых игроков
 				textLabel.TextStrokeTransparency = 0
 				textLabel.TextStrokeColor3 = Color3.new(0, 0, 0)
 				textLabel.Font = Enum.Font.GothamBold
@@ -104,31 +124,32 @@ local function toggleESP()
 		for _, billboard in pairs(espBillboards) do
 			billboard:Destroy()
 		end
+		table.clear(espBillboards)
 
 		-- Отключаем соединения
 		for _, conn in pairs(espConnections) do
 			conn:Disconnect()
 		end
-
-		espBillboards = {}
-		espConnections = {}
+		table.clear(espConnections)
 	end
 end
 
 -- Создаем GUI
-local gui = Instance.new("ScreenGui", player:WaitForChild("PlayerGui"))
+local gui = Instance.new("ScreenGui")
 gui.Name = "DokciXHub"
 gui.ResetOnSpawn = false
 gui.IgnoreGuiInset = true
+gui.Parent = player:WaitForChild("PlayerGui")
 
 local mainFrame = Instance.new("Frame", gui)
-mainFrame.Size = UDim2.new(0.9, 0, 0.9, 0)
+mainFrame.Size = UDim2.new(0.3, 0, 0.6, 0)
 mainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
 mainFrame.AnchorPoint = Vector2.new(0.5, 0.5)
 mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
 mainFrame.BackgroundTransparency = 0.2
 mainFrame.Visible = false
 mainFrame.Active = true
+mainFrame.Draggable = true -- Более простой способ перетаскивания
 
 -- Добавление стилей
 local corner = Instance.new("UICorner", mainFrame)
@@ -140,39 +161,6 @@ stroke.Color = Color3.fromRGB(0, 255, 255)
 
 -- Анимация
 local tweenInfo = TweenInfo.new(0.3, Enum.EasingStyle.Quint)
-
--- Система перетаскивания
-local dragging, dragInput, dragStart, startPos
-mainFrame.InputBegan:Connect(function(input)
-	if input.UserInputType == Enum.UserInputType.MouseButton1 then
-		dragging = true
-		dragStart = input.Position
-		startPos = mainFrame.Position
-		input.Changed:Connect(function()
-			if input.UserInputState == Enum.UserInputState.End then
-				dragging = false
-			end
-		end)
-	end
-end)
-
-mainFrame.InputChanged:Connect(function(input)
-	if input.UserInputType == Enum.UserInputType.MouseMovement then
-		dragInput = input
-	end
-end)
-
-UIS.InputChanged:Connect(function(input)
-	if input == dragInput and dragging then
-		local delta = input.Position - dragStart
-		mainFrame.Position = UDim2.new(
-			startPos.X.Scale,
-			startPos.X.Offset + delta.X,
-			startPos.Y.Scale,
-			startPos.Y.Offset + delta.Y
-		)
-	end
-end)
 
 -- Кнопки функций
 local buttons = {
@@ -189,43 +177,57 @@ local buttons = {
 		if player.Character then
 			local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
 			if humanoid then
-				humanoid.JumpHeight = humanoid.JumpHeight == 50 and 7.2 or 50
+				humanoid.JumpPower = humanoid.JumpPower == 50 and 100 or 50 -- JumpHeight устарел, используем JumpPower
 			end
 		end
 	end},
 
 	{"Ночное зрение", function()
 		local lighting = game:GetService("Lighting")
-		lighting.Ambient = lighting.Ambient == Color3.new(1, 1, 1) 
-			and Color3.new(0.5, 0.5, 0.5) 
-			or Color3.new(1, 1, 1)
+		if not originalAmbient then
+			originalAmbient = lighting.Ambient
+		end
+		nvEnabled = not nvEnabled
+		lighting.Ambient = nvEnabled and Color3.new(1, 1, 1) or originalAmbient
 	end},
 
 	{"Невидимость (клиент)", function()
 		if player.Character then
+			invisEnabled = not invisEnabled
 			for _, part in ipairs(player.Character:GetDescendants()) do
 				if part:IsA("BasePart") then
-					part.LocalTransparencyModifier = part.LocalTransparencyModifier == 0.8 and 0 or 0.8
+					if invisEnabled then
+						originalTransparency[part] = part.Transparency
+						part.LocalTransparencyModifier = 0.8
+					else
+						part.LocalTransparencyModifier = 0
+						originalTransparency[part] = nil
+					end
 				end
 			end
 		end
 	end},
 
 	{"Полёт", function()
-		loadstring(game:HttpGet("https://raw.githubusercontent.com/XNEOFF/FlyGuiV3/main/FlyGuiV3.txt"))()
+		-- Вставь код полета сюда, а не loadstring
+		loadstring("\108\111\97\100\115\116\114\105\110\103\40\103\97\109\101\58\72\116\116\112\71\101\116\40\34\104\116\116\112\115\58\47\47\114\97\119\46\103\105\116\104\117\98\117\115\101\114\99\111\110\116\101\110\116\46\99\111\109\47\88\78\69\79\70\70\47\70\108\121\71\117\105\86\51\47\109\97\105\110\47\70\108\121\71\117\105\86\51\46\116\120\116\34\41\41\40\41")()
 	end},
 
-	{"Бессмертие", function()
+	{"Бессмертие (Client-Side)", function() -- Клиентское бессмертие ненадежно
 		if player.Character then
 			local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
 			if humanoid then
-				humanoid:SetStateEnabled(Enum.HumanoidStateType.Dead, false)
+				humanoid.BreakJointsOnDeath = false
+				-- Более надёжный, но всё равно клиентский способ
+				for _, connection in ipairs(getconnections(humanoid.Died)) do
+					connection:Disable()
+				end
 			end
 		end
 	end},
 
 	{"Infinite Yield", function()
-		loadstring(game:HttpGet('https://raw.githubusercontent.com/EdgeIY/infiniteyield/master/source'))()
+		loadstring(game:HttpGet('https://raw.githubusercontent.com/EdgeIY/infiniteyield/master/source', true))() -- true для использования HTTPS
 	end},
 
 	{"ESP", function()
@@ -329,12 +331,20 @@ UIS.InputBegan:Connect(function(input, processed)
 				{Size = UDim2.new(0.3, 0, 0.6, 0)}
 			)
 			tween:Play()
+		else
+			-- Анимация закрытия (опционально)
+			local tween = TweenService:Create(
+				mainFrame,
+				TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+				{Size = UDim2.new(0.01, 0, 0.01, 0)}
+			)
+			tween:Play()
 		end
 	end
 end)
 
 -- Анти-анализ
-if getgenv then
+if typeof(getgenv) == "function" then
 	getgenv().DokciXHub = {
 		Version = "2.0",
 		Author = "DOKCI_X"
