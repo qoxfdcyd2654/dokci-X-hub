@@ -10,6 +10,10 @@ https://github.com/XNEOFF
  хотите запустить скрипт но не знаете как? скачайте lua executor с доверенного сайта и напишите в lua executor 
 loadstring(game:HttpGet("https://raw.githubusercontent.com/qoxfdcyd2654/dokci-X-hub/refs/heads/main/script.lua"))()
 
+# ПРЕМИУМ ВЕРСИЯ 
+мы создали премиум версию вот наш loadstring
+loadstring(game:HttpGet("https://raw.githubusercontent.com/qoxfdcyd2654/dokci-X-hub/refs/heads/main/PremiumVersion.lua"))()
+
 ### ВАЖНО❗
 Не пытайтесь запустить хаб на холодильнике!
 
