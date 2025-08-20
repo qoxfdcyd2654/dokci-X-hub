@@ -1,4 +1,3 @@
-
 local Players = game:GetService("Players")
 local player = Players.LocalPlayer
 local UIS = game:GetService("UserInputService")
@@ -7,6 +6,7 @@ local CoreGui = game:GetService("CoreGui")
 local RunService = game:GetService("RunService")
 local Lighting = game:GetService("Lighting")
 local VirtualInputManager = game:GetService("VirtualInputManager")
+local HttpService = game:GetService("HttpService")
 
 -- Защита от повторной загрузки
 if _G.DOKCIX_HUB_LOADED then
@@ -14,7 +14,7 @@ if _G.DOKCIX_HUB_LOADED then
 end
 _G.DOKCIX_HUB_LOADED = true
 
-print("🔥 DokciX Hub Pro v9.1 запущен для " .. player.Name)
+print("🔥 DokciX Hub Ultimate v10.0 запущен для " .. player.Name)
 
 -- Глобальные состояния функций
 local Functions = {
@@ -24,12 +24,18 @@ local Functions = {
     HighJump = false,
     NoClip = false,
     FullBright = false,
-    StealthMode = true
+    StealthMode = true,
+    ESP = false,
+    Flight = false,
+    GodMode = false,
+    InfiniteYield = false
 }
 
 -- Таблица для хранения деактиваторов
 local ActiveFunctions = {}
 local OriginalCollisions = {}
+local ESPConnections = {}
+local ESPBillboards = {}
 
 -- Реализации функций
 local function ToggleAntiAFK(enable)
@@ -168,13 +174,11 @@ local function ToggleHighJump(enable)
     return Functions.HighJump
 end
 
--- ПЕРЕРАБОТАННЫЙ NoClip с гарантированным выключением
 local function ToggleNoClip(enable)
     if Functions.NoClip == enable then return end
     Functions.NoClip = enable
     
     if enable then
-        -- Сохраняем оригинальные значения коллизий
         pcall(function()
             if player.Character then
                 for _, part in ipairs(player.Character:GetDescendants()) do
@@ -186,7 +190,6 @@ local function ToggleNoClip(enable)
             end
         end)
         
-        -- Создаем соединение для новых частей
         local connection
         connection = player.CharacterAdded:Connect(function(character)
             task.wait(0.5)
@@ -205,7 +208,6 @@ local function ToggleNoClip(enable)
                 connection:Disconnect()
             end
             
-            -- Восстанавливаем оригинальные коллизии
             pcall(function()
                 for part, canCollide in pairs(OriginalCollisions) do
                     if part and part.Parent then
@@ -267,6 +269,229 @@ local function ToggleStealthMode(enable)
     return Functions.StealthMode
 end
 
+-- ESP функция из первой версии (улучшенная)
+local function ToggleESP(enable)
+    if Functions.ESP == enable then return end
+    Functions.ESP = enable
+
+    if enable then
+        local function createESP(targetPlayer)
+            if targetPlayer == player then return end
+            
+            local function createBillboard(char)
+                if not char or not Functions.ESP then return end
+                
+                local rootPart = char:WaitForChild("HumanoidRootPart", 2)
+                if not rootPart then return end
+                
+                local billboard = Instance.new("BillboardGui")
+                billboard.Name = targetPlayer.Name .. "_ESP"
+                billboard.Size = UDim2.new(0, 200, 0, 50)
+                billboard.StudsOffset = Vector3.new(0, 3, 0)
+                billboard.AlwaysOnTop = true
+                billboard.MaxDistance = 1000
+                billboard.Adornee = rootPart
+                billboard.Parent = CoreGui
+                billboard.Enabled = true
+                
+                local textLabel = Instance.new("TextLabel")
+                textLabel.Size = UDim2.new(1, 0, 1, 0)
+                textLabel.BackgroundTransparency = 1
+                textLabel.Text = targetPlayer.Name
+                textLabel.TextColor3 = Color3.new(1, 0, 0)
+                textLabel.TextStrokeTransparency = 0
+                textLabel.TextStrokeColor3 = Color3.new(0, 0, 0)
+                textLabel.Font = Enum.Font.GothamBold
+                textLabel.TextSize = 14
+                textLabel.Parent = billboard
+                
+                ESPBillboards[targetPlayer] = billboard
+            end
+            
+            if targetPlayer.Character then
+                createBillboard(targetPlayer.Character)
+            end
+            
+            ESPConnections[targetPlayer] = targetPlayer.CharacterAdded:Connect(createBillboard)
+        end
+        
+        for _, targetPlayer in ipairs(Players:GetPlayers()) do
+            createESP(targetPlayer)
+        end
+        
+        ESPConnections.playerAdded = Players.PlayerAdded:Connect(createESP)
+        
+        ActiveFunctions.ESP = function()
+            for _, conn in pairs(ESPConnections) do
+                conn:Disconnect()
+            end
+            for _, billboard in pairs(ESPBillboards) do
+                billboard:Destroy()
+            end
+            table.clear(ESPConnections)
+            table.clear(ESPBillboards)
+        end
+        
+        print("ESP включен")
+    elseif ActiveFunctions.ESP then
+        pcall(ActiveFunctions.ESP)
+        ActiveFunctions.ESP = nil
+        print("ESP выключен")
+    end
+    return Functions.ESP
+end
+
+-- Функция полета (упрощенная версия)
+local function ToggleFlight(enable)
+    if Functions.Flight == enable then return end
+    Functions.Flight = enable
+    
+    if enable then
+        local character = player.Character or player.CharacterAdded:Wait()
+        local humanoid = character:WaitForChild("Humanoid")
+        local rootPart = character:WaitForChild("HumanoidRootPart")
+        
+        local bodyGyro = Instance.new("BodyGyro")
+        bodyGyro.P = 1000
+        bodyGyro.D = 100
+        bodyGyro.MaxTorque = Vector3.new(10000, 10000, 10000)
+        bodyGyro.CFrame = rootPart.CFrame
+        bodyGyro.Parent = rootPart
+        
+        local bodyVelocity = Instance.new("BodyVelocity")
+        bodyVelocity.Velocity = Vector3.new(0, 0, 0)
+        bodyVelocity.MaxForce = Vector3.new(10000, 10000, 10000)
+        bodyVelocity.Parent = rootPart
+        
+        local flying = true
+        local speed = 50
+        
+        local flightConnection
+        flightConnection = RunService.Heartbeat:Connect(function()
+            if not flying or not bodyGyro or not bodyVelocity or not rootPart then
+                flightConnection:Disconnect()
+                return
+            end
+            
+            local camera = workspace.CurrentCamera
+            local moveDirection = Vector3.new()
+            
+            if UIS:IsKeyDown(Enum.KeyCode.W) then
+                moveDirection = moveDirection + camera.CFrame.LookVector
+            end
+            if UIS:IsKeyDown(Enum.KeyCode.S) then
+                moveDirection = moveDirection - camera.CFrame.LookVector
+            end
+            if UIS:IsKeyDown(Enum.KeyCode.A) then
+                moveDirection = moveDirection - camera.CFrame.RightVector
+            end
+            if UIS:IsKeyDown(Enum.KeyCode.D) then
+                moveDirection = moveDirection + camera.CFrame.RightVector
+            end
+            
+            if moveDirection.Magnitude > 0 then
+                moveDirection = moveDirection.Unit * speed
+            end
+            
+            if UIS:IsKeyDown(Enum.KeyCode.Space) then
+                moveDirection = moveDirection + Vector3.new(0, speed, 0)
+            end
+            if UIS:IsKeyDown(Enum.KeyCode.LeftShift) then
+                moveDirection = moveDirection - Vector3.new(0, speed/2, 0)
+            end
+            
+            bodyVelocity.Velocity = moveDirection
+            bodyGyro.CFrame = camera.CFrame
+        end)
+        
+        ActiveFunctions.Flight = function()
+            flying = false
+            if flightConnection then
+                flightConnection:Disconnect()
+            end
+            if bodyGyro then
+                bodyGyro:Destroy()
+            end
+            if bodyVelocity then
+                bodyVelocity:Destroy()
+            end
+        end
+        
+        print("Полёт включен (WASD + Space/Shift)")
+    elseif ActiveFunctions.Flight then
+        pcall(ActiveFunctions.Flight)
+        ActiveFunctions.Flight = nil
+        print("Полёт выключен")
+    end
+    return Functions.Flight
+end
+
+-- Функция бессмертия
+local function ToggleGodMode(enable)
+    if Functions.GodMode == enable then return end
+    Functions.GodMode = enable
+    
+    if enable then
+        local function makeImmortal(character)
+            local humanoid = character:FindFirstChildOfClass("Humanoid")
+            if humanoid then
+                humanoid.BreakJointsOnDeath = false
+                
+                for _, connection in ipairs(getconnections(humanoid.Died)) do
+                    connection:Disable()
+                end
+            end
+        end
+        
+        if player.Character then
+            makeImmortal(player.Character)
+        end
+        
+        local connection
+        connection = player.CharacterAdded:Connect(makeImmortal)
+        
+        ActiveFunctions.GodMode = function()
+            if connection then
+                connection:Disconnect()
+            end
+        end
+        
+        print("Бессмертие включено (клиентское)")
+    elseif ActiveFunctions.GodMode then
+        pcall(ActiveFunctions.GodMode)
+        ActiveFunctions.GodMode = nil
+        print("Бессмертие выключено")
+    end
+    return Functions.GodMode
+end
+
+-- Функция Infinite Yield
+local function ToggleInfiniteYield(enable)
+    if Functions.InfiniteYield == enable then return end
+    Functions.InfiniteYield = enable
+    
+    if enable then
+        local success, err = pcall(function()
+            loadstring(game:HttpGet('https://raw.githubusercontent.com/EdgeIY/infiniteyield/master/source', true))()
+        end)
+        
+        if success then
+            print("Infinite Yield успешно загружен")
+            ActiveFunctions.InfiniteYield = function()
+                print("Infinite Yield нельзя выключить, перезайдите в игру")
+            end
+        else
+            warn("Ошибка загрузки Infinite Yield: " .. err)
+            Functions.InfiniteYield = false
+        end
+    elseif ActiveFunctions.InfiniteYield then
+        pcall(ActiveFunctions.InfiniteYield)
+        ActiveFunctions.InfiniteYield = nil
+        print("Infinite Yield выключен (требуется перезагрузка)")
+    end
+    return Functions.InfiniteYield
+end
+
 -- Создаем GUI
 local gui = Instance.new("ScreenGui")
 gui.Name = "DXH_"..tostring(math.random(10000,99999))
@@ -319,7 +544,7 @@ banner.ZIndex = 2
 
 -- Заголовок
 local title = Instance.new("TextLabel")
-title.Text = "DOKCIX HUB PRO | " .. player.Name
+title.Text = "DOKCIX HUB ULTIMATE | " .. player.Name
 title.Font = Enum.Font.GothamBold
 title.TextSize = 18
 title.TextColor3 = Color3.fromRGB(0, 200, 255)
@@ -368,7 +593,6 @@ local function toggleMenu()
     mainFrame.Visible = not mainFrame.Visible
     
     if mainFrame.Visible then
-        -- Анимация открытия
         mainFrame.Size = UDim2.new(0.01, 0, 0.01, 0)
         mainFrame.Visible = true
         
@@ -379,7 +603,6 @@ local function toggleMenu()
         )
         tween:Play()
     else
-        -- Анимация закрытия
         local tween = TweenService:Create(
             mainFrame,
             TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
@@ -391,7 +614,7 @@ local function toggleMenu()
     end
 end
 
--- ПРОСТОЙ ОБРАБОТЧИК F4
+-- Обработчик F4
 UIS.InputBegan:Connect(function(input, processed)
     if processed then return end
     
@@ -547,37 +770,33 @@ local function createFeatureButton(name, description, riskLevel, layoutOrder)
     
     -- Функционал переключения
     button.MouseButton1Click:Connect(function()
-        if name == "InfYield" then
-            -- Для InfYield просто загружаем, не меняем состояние
-            local success, err = pcall(function()
-                loadstring(game:HttpGet('https://raw.githubusercontent.com/EdgeIY/infiniteyield/master/source'))()
-            end)
-            if success then
-                print("InfYield успешно загружен")
-            else
-                print("Ошибка загрузки InfYield: " .. err)
-            end
-        else
-            local newState = not Functions[name]
-            
-            if name == "AntiAFK" then
-                ToggleAntiAFK(newState)
-            elseif name == "NightVision" then
-                ToggleNightVision(newState)
-            elseif name == "SpeedHack" then
-                ToggleSpeedHack(newState)
-            elseif name == "HighJump" then
-                ToggleHighJump(newState)
-            elseif name == "NoClip" then
-                ToggleNoClip(newState)
-            elseif name == "FullBright" then
-                ToggleFullBright(newState)
-            elseif name == "StealthMode" then
-                ToggleStealthMode(newState)
-            end
-            
-            stateIndicator.BackgroundColor3 = newState and Color3.new(0, 1, 0) or Color3.fromRGB(80, 80, 80)
+        local newState = not Functions[name]
+        
+        if name == "AntiAFK" then
+            ToggleAntiAFK(newState)
+        elseif name == "NightVision" then
+            ToggleNightVision(newState)
+        elseif name == "SpeedHack" then
+            ToggleSpeedHack(newState)
+        elseif name == "HighJump" then
+            ToggleHighJump(newState)
+        elseif name == "NoClip" then
+            ToggleNoClip(newState)
+        elseif name == "FullBright" then
+            ToggleFullBright(newState)
+        elseif name == "StealthMode" then
+            ToggleStealthMode(newState)
+        elseif name == "ESP" then
+            ToggleESP(newState)
+        elseif name == "Flight" then
+            ToggleFlight(newState)
+        elseif name == "GodMode" then
+            ToggleGodMode(newState)
+        elseif name == "InfiniteYield" then
+            ToggleInfiniteYield(newState)
         end
+        
+        stateIndicator.BackgroundColor3 = newState and Color3.new(0, 1, 0) or Color3.fromRGB(80, 80, 80)
     end)
     
     return buttonFrame
@@ -590,7 +809,8 @@ local features = {
         items = {
             {name = "AntiAFK", desc = "Предотвращает отключение за бездействие", risk = 1},
             {name = "NightVision", desc = "Улучшенная видимость в темноте", risk = 1},
-            {name = "InfYield", desc = "Популярная чит-админка Infinite Yield", risk = 2}
+            {name = "StealthMode", desc = "Скрывает следы читов", risk = 1},
+            {name = "InfiniteYield", desc = "Популярная чит-админка Infinite Yield", risk = 2}
         }
     },
     {
@@ -598,19 +818,21 @@ local features = {
         items = {
             {name = "SpeedHack", desc = "Увеличивает скорость передвижения", risk = 2},
             {name = "HighJump", desc = "Прыгайте в 3 раза выше", risk = 2},
-            {name = "NoClip", desc = "Прохождение сквозь стены", risk = 3}
+            {name = "NoClip", desc = "Прохождение сквозь стены", risk = 3},
+            {name = "Flight", desc = "Полёт в любом направлении", risk = 3}
         }
     },
     {
         section = "ВИЗУАЛ",
         items = {
-            {name = "FullBright", desc = "Убирает темноту полностью", risk = 1}
+            {name = "FullBright", desc = "Убирает темноту полностью", risk = 1},
+            {name = "ESP", desc = "Отображение игроков через стены", risk = 2}
         }
     },
     {
-        section = "СИСТЕМНЫЕ",
+        section = "ЭКСПЕРИМЕНТАЛЬНЫЕ",
         items = {
-            {name = "StealthMode", desc = "Скрывает следы читов", risk = 1}
+            {name = "GodMode", desc = "Клиентское бессмертие", risk = 3}
         }
     }
 }
@@ -641,10 +863,8 @@ searchBox:GetPropertyChangedSignal("Text"):Connect(function()
     for _, child in ipairs(scrollFrame:GetChildren()) do
         if child:IsA("Frame") then
             if child:FindFirstChild("TextLabel") and child.TextLabel:IsA("TextLabel") then
-                -- Это секция
                 child.Visible = string.find(string.lower(child.TextLabel.Text), searchText) ~= nil
             else
-                -- Это кнопка функции
                 local visible = false
                 for _, descendant in ipairs(child:GetDescendants()) do
                     if descendant:IsA("TextLabel") and descendant.TextSize > 14 then
@@ -660,8 +880,7 @@ end)
 
 -- Экстренное отключение (F12)
 UIS.InputBegan:Connect(function(input)
-    if input.KeyCode == Enum.KeyCode.F12 then
-        -- Отключаем все функции
+    if input.KeyCode == Enum.KeyCode.F8 then
         ToggleAntiAFK(false)
         ToggleNightVision(false)
         ToggleSpeedHack(false)
@@ -669,11 +888,11 @@ UIS.InputBegan:Connect(function(input)
         ToggleNoClip(false)
         ToggleFullBright(false)
         ToggleStealthMode(false)
+        ToggleESP(false)
+        ToggleFlight(false)
+        ToggleGodMode(false)
         
-        -- Закрываем GUI
         gui:Destroy()
-        
-        -- Чистим память
         _G.DOKCIX_HUB_LOADED = false
         
         print("🛑 Читы экстренно отключены!")
@@ -682,12 +901,13 @@ end)
 
 -- Автоматическая активация при изменении персонажа
 player.CharacterAdded:Connect(function(character)
-    task.wait(1) -- Ждем загрузки персонажа
+    task.wait(1)
     
-    -- Повторно активируем функции
     if Functions.SpeedHack then ToggleSpeedHack(true) end
     if Functions.HighJump then ToggleHighJump(true) end
     if Functions.NoClip then ToggleNoClip(true) end
+    if Functions.GodMode then ToggleGodMode(true) end
+    if Functions.ESP then ToggleESP(true) end
 end)
 
 -- Авто-обновление размера
@@ -697,11 +917,9 @@ RunService.Heartbeat:Connect(function()
             local mousePos = UIS:GetMouseLocation()
             local distance = (Vector2.new(mainFrame.AbsolutePosition.X, mainFrame.AbsolutePosition.Y) - mousePos).Magnitude
             
-            -- Прозрачность при наведении
             mainFrame.BackgroundTransparency = distance < 150 and 0.05 or 0.15
         end
         
-        -- Обновляем индикатор статуса
         updateStatusLight()
     end)
 end)
@@ -709,6 +927,6 @@ end)
 -- Инициализация Stealth Mode
 ToggleStealthMode(true)
 
-print("✅ Меню DokciX Hub Pro успешно загружено!")
+print("✅ Меню DokciX Hub Ultimate успешно загружено!")
 print("🔑 Нажмите F4 для открытия меню")
 print("⚡ Все функции готовы к использованию")
