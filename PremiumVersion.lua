@@ -8,6 +8,7 @@ local Lighting = game:GetService("Lighting")
 local VirtualInputManager = game:GetService("VirtualInputManager")
 local HttpService = game:GetService("HttpService")
 
+
 -- Защита от повторной загрузки
 if _G.DOKCIX_HUB_LOADED then
     return
@@ -804,7 +805,11 @@ end
 -- Создаем GUI
 local gui = Instance.new("ScreenGui")
 gui.Name = "DXH_"..tostring(math.random(10000,99999))
-gui.Parent = CoreGui
+if CoreGui:WaitForChild("RobloxGui") then
+    gui.Parent = CoreGui.RobloxGui
+else
+    gui.Parent = CoreGui
+end
 gui.ResetOnSpawn = false
 gui.IgnoreGuiInset = true
 
