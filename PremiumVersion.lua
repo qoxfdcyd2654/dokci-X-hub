@@ -802,13 +802,21 @@ local function ToggleMM2_AutoAvoidMurderer(enable)
     return Functions.MM2_AutoAvoidMurderer
 end
 
+-- создаем ядро чита куда поместится наш оригинальный Gui
+local CoreCheatGui = Instance.new("ScreenGui")
+CoreCheatGui.Name = "DXH_CORE"
+CoreCheatGui.ResetOnSpawn = false
+CoreCheatGui.IgnoreGuiInset = true
+
 -- Создаем GUI
 local gui = Instance.new("ScreenGui")
 gui.Name = "DXH_"..tostring(math.random(10000,99999))
 if CoreGui:WaitForChild("RobloxGui") then
-    gui.Parent = CoreGui.RobloxGui
+    gui.Parent = CoreCheatGui
 else
-    gui.Parent = CoreGui
+    gui.Parent = CoreGui.RobloxGui
+	else
+		gui.Parent = CoreGui
 end
 gui.ResetOnSpawn = false
 gui.IgnoreGuiInset = true
